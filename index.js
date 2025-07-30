@@ -43,9 +43,14 @@ function convertMdFormat(mdContent) {
       continue;
     }
     
-    // 如果在代码块内，保持原有格式，不添加'- '前缀
+    // 如果在代码块内，保持原有格式，不添加'- '前缀和额外缩进
     if (inCodeBlock) {
-      convertedLines.push(`${codeBlockIndent}${line}`);
+      // 移除可能的logseq添加的'- '前缀，但保持代码的原始缩进
+      let codeLine = line;
+      if (codeLine.trim().startsWith('- ')) {
+        codeLine = codeLine.replace(/^(\s*)- /, '$1');
+      }
+      convertedLines.push(codeLine);
       continue;
     }
     
@@ -138,14 +143,25 @@ async function convertToMarkdown() {
     // 将Logseq块结构转换为Markdown
     function blocksToMarkdown(blocks) {
       let markdown = '';
+      let inCodeBlock = false;
       
       for (const block of blocks) {
         if (block.content) {
           let content = block.content.trim();
           
-          // 移除可能的'- '前缀
+          // 检查代码块开始/结束
+          if (content.includes('```')) {
+            inCodeBlock = !inCodeBlock;
+          }
+          
+          // 移除可能的'- '前缀，但对代码块内容特殊处理
           if (content.startsWith('- ')) {
-            content = content.substring(2).trim();
+            if (inCodeBlock || content.includes('```')) {
+              // 对于代码块内容，只移除'- '但保持原始缩进
+              content = content.replace(/^- /, '');
+            } else {
+              content = content.substring(2).trim();
+            }
           }
           
           // 过滤掉分隔线（---）
