@@ -188,39 +188,30 @@ async function processCurrentPage() {
     try {
       // 显示转换结果在弹窗中，让用户手动复制
       const resultHtml = `
-        <div style="padding: 20px; max-width: 800px; max-height: 600px; overflow-y: auto;">
-          <h3>转换结果</h3>
-          <p>请复制以下内容到新页面：</p>
-          <textarea 
-            id="converted-content" 
-            style="width: 100%; height: 400px; font-family: monospace; font-size: 14px; padding: 10px; border: 1px solid #ccc; border-radius: 4px;"
-            readonly
-          >${convertedContent}</textarea>
-          <div style="margin-top: 10px;">
-            <button data-on-click="copyContent" style="padding: 8px 16px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">
-              复制到剪贴板
-            </button>
-            <button data-on-click="closeModal" style="padding: 8px 16px; background: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer; margin-left: 10px;">
-              关闭
-            </button>
+        <div style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 1000;">
+          <div style="background: white; padding: 30px; border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.3); max-width: 90vw; max-height: 90vh; width: 800px; display: flex; flex-direction: column;">
+            <h3 style="margin: 0 0 15px 0; color: #333; font-size: 18px;">转换结果</h3>
+            <p style="margin: 0 0 15px 0; color: #666;">请复制以下内容到新页面：</p>
+            <textarea 
+              id="converted-content" 
+              style="width: 100%; height: 400px; font-family: 'Consolas', 'Monaco', monospace; font-size: 14px; padding: 15px; border: 2px solid #e0e0e0; border-radius: 8px; resize: none; outline: none; box-sizing: border-box;"
+              readonly
+            >${convertedContent}</textarea>
+            <div style="margin-top: 20px; display: flex; gap: 10px; justify-content: flex-end;">
+              <button data-on-click="copyContent" style="padding: 10px 20px; background: #4CAF50; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; transition: background 0.2s;">
+                复制到剪贴板
+              </button>
+              <button data-on-click="closeModal" style="padding: 10px 20px; background: #f44336; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; transition: background 0.2s;">
+                关闭
+              </button>
+            </div>
           </div>
         </div>
       `;
       
       logseq.provideUI({
         key: 'converted-result-modal',
-        template: resultHtml,
-        style: {
-          position: 'fixed',
-          top: '50%',
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
-          backgroundColor: 'white',
-          border: '1px solid #ccc',
-          borderRadius: '8px',
-          boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
-          zIndex: 1000
-        }
+        template: resultHtml
       });
       
       logseq.showMainUI();
@@ -272,6 +263,10 @@ function main() {
       }
     },
     closeModal() {
+      logseq.provideUI({
+        key: 'converted-result-modal',
+        template: ''
+      });
       logseq.hideMainUI();
     }
   });
