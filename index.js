@@ -198,13 +198,16 @@ async function processCurrentPage() {
               readonly
             >${convertedContent}</textarea>
             <div style="margin-top: 20px; display: flex; gap: 10px; justify-content: flex-end;">
-              <button data-on-click="copyContent" style="padding: 10px 20px; background: #4CAF50; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; transition: background 0.2s;">
-                复制到剪贴板
-              </button>
-              <button data-on-click="closeModal" style="padding: 10px 20px; background: #f44336; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; transition: background 0.2s;">
-                关闭
-              </button>
-            </div>
+               <button data-on-click="replaceCurrentPage" style="padding: 10px 20px; background: #2196F3; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; transition: background 0.2s;">
+                 覆盖当前页面
+               </button>
+               <button data-on-click="copyContent" style="padding: 10px 20px; background: #4CAF50; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; transition: background 0.2s;">
+                 复制到剪贴板
+               </button>
+               <button data-on-click="closeModal" style="padding: 10px 20px; background: #f44336; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; transition: background 0.2s;">
+                 关闭
+               </button>
+             </div>
           </div>
         </div>
       `;
@@ -254,6 +257,130 @@ function main() {
   
   logseq.provideModel({
     processCurrentPage,
+    async replaceCurrentPage() {
+       try {
+         const textarea = parent.document.getElementById('converted-content');
+         if (!textarea) {
+           logseq.App.showMsg('❌ 无法获取转换内容', 'error');
+           return;
+         }
+         
+         const convertedContent = textarea.value;
+         const currentPage = await logseq.Editor.getCurrentPage();
+         if (!currentPage) {
+           logseq.App.showMsg('❌ 无法获取当前页面', 'error');
+           return;
+         }
+         
+         // 获取当前页面的所有块
+         const blocks = await logseq.Editor.getPageBlocksTree(currentPage.name);
+         
+         // 删除所有现有块
+         if (blocks && blocks.length > 0) {
+           for (const block of blocks) {
+             await logseq.Editor.removeBlock(block.uuid);
+           }
+         }
+         
+         // 解析转换内容并逐块插入
+         const lines = convertedContent.split('\n');
+         const blockStack = []; // 存储各层级的块UUID
+         
+         let i = 0;
+         while (i < lines.length) {
+           const line = lines[i];
+           if (!line.trim()) {
+             i++;
+             continue;
+           }
+           
+           // 计算缩进层级（每个tab算一级）
+           const indentMatch = line.match(/^(\t*)/);
+           const indentLevel = indentMatch ? indentMatch[1].length : 0;
+           
+           // 移除'- '前缀和缩进
+           let content = line.replace(/^\t*- /, '').trim();
+           if (!content) {
+             i++;
+             continue;
+           }
+           
+           // 检查是否是代码块开始
+           if (content.startsWith('```')) {
+             let codeBlock = content + '\n';
+             i++;
+             // 收集整个代码块
+             while (i < lines.length) {
+               const codeLine = lines[i];
+               codeBlock += codeLine + '\n';
+               if (codeLine.trim().startsWith('```') && codeLine.trim() !== '```') {
+                 break;
+               }
+               if (codeLine.trim() === '```') {
+                 break;
+               }
+               i++;
+             }
+             content = codeBlock.trim();
+           }
+           // 检查是否是表格行
+           else if (content.includes('|')) {
+             let tableBlock = content + '\n';
+             i++;
+             // 收集整个表格
+             while (i < lines.length) {
+               const nextLine = lines[i];
+               const nextContent = nextLine.replace(/^\t*- /, '').trim();
+               if (nextContent && nextContent.includes('|')) {
+                 tableBlock += nextContent + '\n';
+                 i++;
+               } else {
+                 i--; // 回退一行，因为不是表格的一部分
+                 break;
+               }
+             }
+             content = tableBlock.trim();
+           }
+           
+           // 调整blockStack到当前层级
+           blockStack.splice(indentLevel);
+           
+           let parentUuid = null;
+           if (indentLevel > 0 && blockStack[indentLevel - 1]) {
+             parentUuid = blockStack[indentLevel - 1];
+           }
+           
+           // 插入块
+           const insertedBlock = await logseq.Editor.insertBlock(
+             parentUuid || currentPage.name,
+             content,
+             {
+               sibling: parentUuid ? false : (blockStack.length > 0)
+             }
+           );
+           
+           // 将新块UUID存储到对应层级
+           if (insertedBlock) {
+             blockStack[indentLevel] = insertedBlock.uuid;
+           }
+           
+           i++;
+         }
+         
+         // 关闭弹窗
+         logseq.provideUI({
+           key: 'converted-result-modal',
+           template: ''
+         });
+         logseq.hideMainUI();
+         
+         logseq.App.showMsg('✅ 页面内容已成功覆盖！', 'success');
+         
+       } catch (error) {
+         console.error('覆盖页面内容时出错:', error);
+         logseq.App.showMsg(`❌ 覆盖失败: ${error.message}`, 'error');
+       }
+     },
     copyContent() {
       const textarea = parent.document.getElementById('converted-content');
       if (textarea) {
