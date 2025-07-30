@@ -117,6 +117,95 @@ function convertMdFormat(mdContent) {
 }
 
 /**
+ * 将Logseq块结构转换为Markdown格式
+ */
+async function convertToMarkdown() {
+  try {
+    logseq.App.showMsg('🔄 正在转换为Markdown格式...', 'info');
+    
+    const currentPage = await logseq.Editor.getCurrentPage();
+    if (!currentPage) {
+      logseq.App.showMsg('❌ 未找到当前页面', 'error');
+      return;
+    }
+    
+    const blocks = await logseq.Editor.getPageBlocksTree(currentPage.name);
+    if (!blocks || blocks.length === 0) {
+      logseq.App.showMsg('❌ 当前页面没有内容', 'warning');
+      return;
+    }
+    
+    // 将Logseq块结构转换为Markdown
+    function blocksToMarkdown(blocks) {
+      let markdown = '';
+      
+      for (const block of blocks) {
+        if (block.content) {
+          let content = block.content.trim();
+          
+          // 移除可能的'- '前缀
+          if (content.startsWith('- ')) {
+            content = content.substring(2).trim();
+          }
+          
+          // 过滤掉分隔线（---）
+          if (content.trim() === '---') {
+            continue;
+          }
+          
+          // 直接添加内容，不添加额外的标题标记
+          markdown += content + '\n';
+        }
+        
+        // 递归处理子块
+        if (block.children && block.children.length > 0) {
+          markdown += blocksToMarkdown(block.children);
+        }
+      }
+      
+      return markdown;
+    }
+    
+    const markdownContent = blocksToMarkdown(blocks);
+    
+    // 显示转换结果
+    const resultHtml = `
+      <div style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 1000;">
+        <div style="background: white; padding: 30px; border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.3); max-width: 90vw; max-height: 90vh; width: 800px; display: flex; flex-direction: column;">
+          <h3 style="margin: 0 0 15px 0; color: #333; font-size: 18px;">Markdown转换结果</h3>
+          <p style="margin: 0 0 15px 0; color: #666;">以下是转换为标准Markdown格式的内容：</p>
+          <textarea 
+            id="markdown-content" 
+            style="width: 100%; height: 400px; font-family: 'Consolas', 'Monaco', monospace; font-size: 14px; padding: 15px; border: 2px solid #e0e0e0; border-radius: 8px; resize: none; outline: none; box-sizing: border-box;"
+            readonly
+          >${markdownContent}</textarea>
+          <div style="margin-top: 20px; display: flex; gap: 10px; justify-content: flex-end;">
+             <button data-on-click="copyMarkdownContent" style="padding: 10px 20px; background: #4CAF50; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; transition: background 0.2s;">
+               复制到剪贴板
+             </button>
+             <button data-on-click="closeModal" style="padding: 10px 20px; background: #f44336; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; transition: background 0.2s;">
+               关闭
+             </button>
+           </div>
+        </div>
+      </div>
+    `;
+    
+    logseq.provideUI({
+      key: 'markdown-result-modal',
+      template: resultHtml
+    });
+    
+    logseq.showMainUI();
+    logseq.App.showMsg('✅ 转换为Markdown完成！', 'success');
+    
+  } catch (error) {
+    console.error('转换为Markdown时出错:', error);
+    logseq.App.showMsg(`❌ 转换失败: ${error.message}`, 'error');
+  }
+}
+
+/**
  * 处理当前页面的笔记内容
  */
 async function processCurrentPage() {
@@ -241,6 +330,11 @@ function main() {
     key: 'convert-md-format',
     label: '转换当前页面为缩进格式'
   }, processCurrentPage);
+  
+  logseq.App.registerCommandPalette({
+    key: 'convert-to-markdown',
+    label: '转换当前页面为Markdown格式'
+  }, convertToMarkdown);
 
   // 添加工具栏按钮
   logseq.App.registerUIItem('toolbar', {
@@ -251,12 +345,20 @@ function main() {
       </a>
     `
   });
+  
+  logseq.App.registerUIItem('toolbar', {
+    key: 'convert-to-markdown-btn',
+    template: `
+      <a class="button" data-on-click="convertToMarkdown" title="转换当前页面为Markdown格式">
+        <i class="ti ti-markdown"></i>
+      </a>
+    `
+  });
 
   // 注册点击事件
-
-  
   logseq.provideModel({
     processCurrentPage,
+    convertToMarkdown,
     async replaceCurrentPage() {
        try {
          const textarea = parent.document.getElementById('converted-content');
@@ -389,9 +491,22 @@ function main() {
         logseq.App.showMsg('✅ 内容已复制到剪贴板', 'success');
       }
     },
+    
+    copyMarkdownContent() {
+      const textarea = parent.document.getElementById('markdown-content');
+      if (textarea) {
+        textarea.select();
+        parent.document.execCommand('copy');
+        logseq.App.showMsg('✅ Markdown内容已复制到剪贴板', 'success');
+      }
+    },
     closeModal() {
       logseq.provideUI({
         key: 'converted-result-modal',
+        template: ''
+      });
+      logseq.provideUI({
+        key: 'markdown-result-modal',
         template: ''
       });
       logseq.hideMainUI();
