@@ -1,9 +1,9 @@
 {
-  "name": "logseq-hello-world",
-  "version": "0.0.1",
+  "name": "logseq-md-format-converter",
+  "version": "1.0.0",
   "author": "©Logseq Team",
   "main": "index.html",
-  "description": "📖 Hello, Logseq :)",
+  "description": "📝 Markdown格式转换插件 - 将当前页面的Markdown内容转换为带缩进的层级格式",
   "license": "MIT",
   "devDependencies": {
     "@logseq/libs": "^0.0.1-alpha.29"
