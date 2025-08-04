@@ -1,11 +1,11 @@
 /**
- * 核心功能模块
+ * 核心转换功能模块
  * 包含主要的转换功能和业务逻辑
  */
 
-import { convertMdFormat, blocksToMarkdown, extractContent } from './converters.js';
-import { createMarkdownResultModal, createConvertedResultModal, showModal, uiHandlers } from './ui.js';
-import { getCurrentPage, getPageBlocks, showMessage, hasPageContent, isContentEmpty, replaceCurrentPageContent } from './utils.js';
+import { convertMdFormat, blocksToMarkdown, extractContent } from '../converters.js';
+import { createMarkdownResultModal, createConvertedResultModal, showModal, uiHandlers } from '../ui.js';
+import { getCurrentPage, getPageBlocks, showMessage, hasPageContent, isContentEmpty, replaceCurrentPageContent } from '../utils.js';
 
 /**
  * 将Logseq块结构转换为Markdown格式
@@ -115,11 +115,3 @@ export async function replaceCurrentPage() {
     showMessage(`❌ 覆盖失败: ${error.message}`, 'error');
   }
 }
-
-// 导出所有核心功能
-export const coreFunctions = {
-  convertToMarkdown,
-  processCurrentPage,
-  replaceCurrentPage,
-  ...uiHandlers
-};

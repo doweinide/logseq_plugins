@@ -66,6 +66,10 @@ export function createConvertedResultModal(convertedContent) {
   `;
 }
 
+
+
+
+
 /**
  * UI交互函数集合
  */
@@ -94,6 +98,10 @@ export const uiHandlers = {
     }
   },
   
+
+  
+
+  
   /**
    * 关闭模态框
    */
@@ -106,6 +114,7 @@ export const uiHandlers = {
       key: 'markdown-result-modal',
       template: ''
     });
+
     logseq.hideMainUI();
   }
 };
