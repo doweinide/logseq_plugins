@@ -4,6 +4,7 @@
  */
 
 import { coreFunctions } from './core/handlers.js';
+import { uiHandlers } from './ui.js';
 import { registerCommand, registerToolbarButton, showMessage } from './utils.js';
 
 /**
@@ -41,7 +42,10 @@ function main() {
 
 
   // 注册点击事件处理函数
-  logseq.provideModel(coreFunctions);
+  logseq.provideModel({
+    ...coreFunctions,
+    ...uiHandlers
+  });
 
   showMessage('📝 Markdown格式转换插件已加载！', 'success');
 }

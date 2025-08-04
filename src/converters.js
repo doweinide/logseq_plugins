@@ -16,7 +16,9 @@ export function convertMdFormat(mdContent) {
   }
 
   const convertedLines = [];
-  const stack = []; // 标题层级栈
+  const realHeaderStack = []; // 真实h标签栈
+  let lastRealHeaderLevel = 0; // 最近的真h标签层级
+  let lastPseudoHeader = null; // 最近的伪h标签信息 {type: 'bold'|'code', level: number}
   let inCodeBlock = false; // 跟踪是否在代码块内
   let inTable = false; // 跟踪是否在表格内
   let tableIndent = ''; // 记录表格的缩进
@@ -36,7 +38,7 @@ export function convertMdFormat(mdContent) {
       if (!inCodeBlock) {
         // 开始代码块
         inCodeBlock = true;
-        codeBlockIndent = '\t'.repeat(stack.length);
+        codeBlockIndent = '\t'.repeat(realHeaderStack.length);
         convertedLines.push(`${codeBlockIndent}- ${stripped}`);
       } else {
         // 结束代码块
@@ -63,7 +65,7 @@ export function convertMdFormat(mdContent) {
       if (!inTable) {
         // 开始表格
         inTable = true;
-        tableIndent = '\t'.repeat(stack.length);
+        tableIndent = '\t'.repeat(realHeaderStack.length);
         convertedLines.push(`${tableIndent}- ${stripped}`);
       } else {
         // 表格内容行，不添加'- '前缀
@@ -92,32 +94,94 @@ export function convertMdFormat(mdContent) {
     let level = 0;
     let prefix = '';
     let tempStripped = stripped;
+    let isSpecialTitle = false;
+    
+    // 检查是否为标准标题格式（#开头）
     while (tempStripped.startsWith('#')) {
       level++;
       prefix += '#';
       tempStripped = tempStripped.substring(1).trim();
     }
+    
+    // 检查是否为特殊标题格式：**xxx**：或`xxxxx`：
+    if (level === 0) {
+      const boldTitlePattern = /^\*\*[^*]+\*\*：/;
+      const codeTitlePattern = /^`[^`]+`(?:\/`[^`]+`)*：/;
+      
+      if (boldTitlePattern.test(stripped) || codeTitlePattern.test(stripped)) {
+        isSpecialTitle = true;
+        const isBoldTitle = boldTitlePattern.test(stripped);
+        const isCodeTitle = codeTitlePattern.test(stripped);
+        const currentPseudoType = isBoldTitle ? 'bold' : 'code';
+        
+        // 伪标题的层级设置逻辑
+        if (lastPseudoHeader) {
+          // 有上一个伪标题
+          if (lastPseudoHeader.type === currentPseudoType) {
+            // 同类型伪标签
+            if (isBoldTitle) {
+              // **xxx**：同类型找真标签
+              level = lastRealHeaderLevel + 1;
+            } else {
+              // `xxxx`：同类型找**xxx**：伪标签
+              level = lastPseudoHeader.level;
+            }
+          } else {
+            // 不同类型，`xxxx`：优先级低于**xxx**：
+            if (isCodeTitle) {
+              // 当前是code类型，优先级低，为下一级
+              level = lastPseudoHeader.level + 1;
+            } else {
+              // 当前是bold类型，优先级高，与真标签同级
+              level = lastRealHeaderLevel + 1;
+            }
+          }
+        } else {
+          // 没有上一个伪标题，基于最近的真标签
+          level = lastRealHeaderLevel + 1;
+        }
+        
+        // 更新最近的伪标题信息
+        lastPseudoHeader = {type: currentPseudoType, level: level};
+      }
+    }
 
-    if (level > 0) { // 如果是标题行
-      if (level === 1) {
+    if (level > 0) { // 如果是标题行（包括特殊标题）
+      if (level === 1 && !isSpecialTitle) {
         // 一级标题保持原样，不添加缩进和前缀
         convertedLines.push(stripped);
-        stack.length = 0; // 清空栈
-        stack.push(level);
-      } else {
-        // 调整栈，移除比当前级别深的所有标题
-        while (stack.length && level <= stack[stack.length - 1]) {
-          stack.pop();
+        realHeaderStack.length = 0; // 清空真标题栈
+        realHeaderStack.push(level);
+        lastRealHeaderLevel = level;
+        lastPseudoHeader = null; // 重置伪标题
+      } else if (!isSpecialTitle) {
+        // 真实标题处理
+        // 调整真标题栈，移除比当前级别深的所有标题
+        while (realHeaderStack.length && level <= realHeaderStack[realHeaderStack.length - 1]) {
+          realHeaderStack.pop();
         }
-        stack.push(level);
+        realHeaderStack.push(level);
+        lastRealHeaderLevel = level;
+        lastPseudoHeader = null; // 重置伪标题
 
         // 缩进量为当前层级深度减1（因为一级标题不计入缩进）
-        const indent = '\t'.repeat(stack.length - 1);
+        const indent = '\t'.repeat(realHeaderStack.length - 1);
+        convertedLines.push(`${indent}- ${stripped}`);
+      } else {
+        // 伪标题处理
+        // 缩进量基于真标题栈深度加上伪标题的相对层级
+        const baseIndent = realHeaderStack.length;
+        const pseudoIndent = level - lastRealHeaderLevel - 1;
+        const indent = '\t'.repeat(baseIndent + pseudoIndent);
         convertedLines.push(`${indent}- ${stripped}`);
       }
     } else { // 非标题行
-      // 缩进量为当前最深层级的深度
-      const indent = '\t'.repeat(stack.length);
+      // 缩进量基于当前的层级状态
+      let currentDepth = realHeaderStack.length;
+      if (lastPseudoHeader) {
+        currentDepth += (lastPseudoHeader.level - lastRealHeaderLevel);
+      }
+      const indent = '\t'.repeat(currentDepth);
       convertedLines.push(`${indent}- ${stripped}`);
     }
   }

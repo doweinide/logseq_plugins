@@ -106,6 +106,7 @@ export const uiHandlers = {
    * 关闭模态框
    */
   closeModal() {
+    // 清空所有模态框UI组件
     logseq.provideUI({
       key: 'converted-result-modal',
       template: ''
@@ -114,8 +115,11 @@ export const uiHandlers = {
       key: 'markdown-result-modal',
       template: ''
     });
-
-    logseq.hideMainUI();
+    
+    // 延迟隐藏主UI，确保UI组件清理完成
+    setTimeout(() => {
+      logseq.hideMainUI();
+    }, 10);
   }
 };
 
