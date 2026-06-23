@@ -21,6 +21,9 @@ export function createMarkdownResultModal(markdownContent) {
           readonly
         >${markdownContent}</textarea>
         <div style="margin-top: 20px; display: flex; gap: 10px; justify-content: flex-end;">
+           <button data-on-click="replaceCurrentPageWithMarkdown" style="padding: 10px 20px; background: #2196F3; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; transition: background 0.2s;">
+             还原为md格式
+           </button>
            <button data-on-click="copyMarkdownContent" style="padding: 10px 20px; background: #4CAF50; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; transition: background 0.2s;">
              复制到剪贴板
            </button>
@@ -37,14 +40,29 @@ export function createMarkdownResultModal(markdownContent) {
  * 生成转换结果模态框HTML
  * 
  * @param {string} convertedContent - 转换后的内容
+ * @param {string} sourceContent - 原始内容
  * @returns {string} - HTML模板字符串
  */
-export function createConvertedResultModal(convertedContent) {
+export function createConvertedResultModal(convertedContent, sourceContent) {
   return `
     <div style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 1000;">
       <div style="background: white; padding: 30px; border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.3); max-width: 90vw; max-height: 90vh; width: 800px; display: flex; flex-direction: column;">
         <h3 style="margin: 0 0 15px 0; color: #333; font-size: 18px;">转换结果</h3>
         <p style="margin: 0 0 15px 0; color: #666;">请复制以下内容到新页面：</p>
+        <label style="display: flex; align-items: center; gap: 8px; margin: 0 0 15px 0; color: #333; font-size: 14px; cursor: pointer;">
+          <input
+            id="enable-colon-indent"
+            type="checkbox"
+            data-on-click="toggleColonIndent"
+            style="margin: 0;"
+          />
+          开启冒号缩进
+        </label>
+        <textarea
+          id="source-content"
+          style="display: none;"
+          readonly
+        >${sourceContent}</textarea>
         <textarea 
           id="converted-content" 
           style="width: 100%; height: 400px; font-family: 'Consolas', 'Monaco', monospace; font-size: 14px; padding: 15px; border: 2px solid #e0e0e0; border-radius: 8px; resize: none; outline: none; box-sizing: border-box;"

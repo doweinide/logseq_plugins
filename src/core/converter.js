@@ -69,12 +69,14 @@ export async function processCurrentPage() {
     }
     
     // 转换格式
-    const convertedContent = convertMdFormat(pageContent);
+    const convertedContent = convertMdFormat(pageContent, {
+      enableColonIndent: false
+    });
     console.log('转换后的内容:', convertedContent);
     
     try {
       // 显示转换结果在弹窗中，让用户手动复制
-      const resultHtml = createConvertedResultModal(convertedContent);
+      const resultHtml = createConvertedResultModal(convertedContent, pageContent);
       showModal('converted-result-modal', resultHtml);
       
       showMessage('✅ 转换完成！请从弹窗中复制内容', 'success');
@@ -87,6 +89,31 @@ export async function processCurrentPage() {
   } catch (error) {
     console.error('处理页面时出错:', error);
     showMessage(`❌ 处理失败: ${error.message}`, 'error');
+  }
+}
+
+/**
+ * 切换是否开启冒号缩进，并重算转换结果
+ */
+export async function toggleColonIndent() {
+  try {
+    const sourceTextarea = parent.document.getElementById('source-content');
+    const convertedTextarea = parent.document.getElementById('converted-content');
+    const checkbox = parent.document.getElementById('enable-colon-indent');
+
+    if (!sourceTextarea || !convertedTextarea || !checkbox) {
+      showMessage('❌ 无法更新转换内容', 'error');
+      return;
+    }
+
+    const nextContent = convertMdFormat(sourceTextarea.value, {
+      enableColonIndent: checkbox.checked
+    });
+
+    convertedTextarea.value = nextContent;
+  } catch (error) {
+    console.error('切换冒号缩进时出错:', error);
+    showMessage(`❌ 更新失败: ${error.message}`, 'error');
   }
 }
 
@@ -113,5 +140,29 @@ export async function replaceCurrentPage() {
   } catch (error) {
     console.error('覆盖页面内容时出错:', error);
     showMessage(`❌ 覆盖失败: ${error.message}`, 'error');
+  }
+}
+
+/**
+ * 将当前页面内容还原为 Markdown 格式
+ */
+export async function replaceCurrentPageWithMarkdown() {
+  try {
+    const textarea = parent.document.getElementById('markdown-content');
+    if (!textarea) {
+      showMessage('❌ 无法获取 Markdown 内容', 'error');
+      return;
+    }
+
+    const markdownContent = textarea.value;
+    const success = await replaceCurrentPageContent(markdownContent, 'markdown');
+
+    if (success) {
+      uiHandlers.closeModal();
+      showMessage('✅ 页面内容已还原为 Markdown 格式！', 'success');
+    }
+  } catch (error) {
+    console.error('还原 Markdown 格式时出错:', error);
+    showMessage(`❌ 还原失败: ${error.message}`, 'error');
   }
 }

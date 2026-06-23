@@ -3,8 +3,13 @@
  * 整合所有核心功能的处理函数
  */
 
-import { convertToMarkdown, processCurrentPage, replaceCurrentPage } from './converter.js';
-import { showMessage } from '../utils.js';
+import {
+  convertToMarkdown,
+  processCurrentPage,
+  toggleColonIndent,
+  replaceCurrentPage,
+  replaceCurrentPageWithMarkdown
+} from './converter.js';
 
 
 
@@ -13,12 +18,16 @@ export const coreFunctions = {
   // 原有功能
   convertToMarkdown,
   processCurrentPage,
-  replaceCurrentPage
+  toggleColonIndent,
+  replaceCurrentPage,
+  replaceCurrentPageWithMarkdown
 };
 
 // 导出单独的处理函数
 export {
   convertToMarkdown,
   processCurrentPage,
-  replaceCurrentPage
+  toggleColonIndent,
+  replaceCurrentPage,
+  replaceCurrentPageWithMarkdown
 };

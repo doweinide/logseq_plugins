@@ -45,12 +45,234 @@ export function showMessage(message, type = 'info') {
 }
 
 /**
+ * 获取行的缩进层级
+ *
+ * @param {string} line - 当前行
+ * @param {'indent'|'markdown'} contentMode - 内容模式
+ * @returns {number} - 缩进层级
+ */
+function getLineIndentLevel(line, contentMode) {
+  if (contentMode !== 'indent') {
+    return 0;
+  }
+
+  const indentMatch = line.match(/^(\t*)/);
+  return indentMatch ? indentMatch[1].length : 0;
+}
+
+/**
+ * 提取当前行的有效内容
+ *
+ * @param {string} line - 当前行
+ * @param {'indent'|'markdown'} contentMode - 内容模式
+ * @returns {string} - 行内容
+ */
+function extractLineContent(line, contentMode) {
+  if (contentMode === 'indent') {
+    return line.replace(/^\t*- /, '').trim();
+  }
+
+  return line.trim();
+}
+
+/**
+ * 将文本内容解析为批量插入所需的块树结构
+ *
+ * @param {string} rawContent - 原始内容
+ * @param {'indent'|'markdown'} contentMode - 内容模式
+ * @returns {Array} - Logseq 批量插入块结构
+ */
+function buildBatchBlocksFromContent(rawContent, contentMode = 'indent') {
+  const lines = rawContent.split('\n');
+  const roots = [];
+  const blockStack = [];
+
+  const pushBlock = (indentLevel, content) => {
+    const normalizedIndentLevel = Math.min(indentLevel, blockStack.length);
+    const block = { content };
+
+    while (blockStack.length > normalizedIndentLevel) {
+      blockStack.pop();
+    }
+
+    if (normalizedIndentLevel === 0) {
+      roots.push(block);
+    } else {
+      const parent = blockStack[normalizedIndentLevel - 1];
+      if (!parent) {
+        roots.push(block);
+      } else {
+        if (!parent.children) {
+          parent.children = [];
+        }
+        parent.children.push(block);
+      }
+    }
+
+    blockStack[normalizedIndentLevel] = block;
+    blockStack.length = normalizedIndentLevel + 1;
+  };
+
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    if (!line.trim()) {
+      i++;
+      continue;
+    }
+
+    const indentLevel = getLineIndentLevel(line, contentMode);
+    let content = extractLineContent(line, contentMode);
+
+    if (!content) {
+      i++;
+      continue;
+    }
+
+    if (content.startsWith('```')) {
+      let codeBlock = content + '\n';
+      i++;
+
+      while (i < lines.length) {
+        const codeLine = lines[i];
+        codeBlock += codeLine + '\n';
+
+        if (codeLine.trim().startsWith('```')) {
+          break;
+        }
+
+        i++;
+      }
+
+      pushBlock(indentLevel, codeBlock.trim());
+      i++;
+      continue;
+    }
+
+    if (content.includes('|')) {
+      let tableBlock = content + '\n';
+      i++;
+
+      while (i < lines.length) {
+        const nextLine = lines[i];
+        const nextContent = extractLineContent(nextLine, contentMode);
+
+        if (nextContent && nextContent.includes('|')) {
+          tableBlock += nextContent + '\n';
+          i++;
+          continue;
+        }
+
+        break;
+      }
+
+      pushBlock(indentLevel, tableBlock.trim());
+      continue;
+    }
+
+    pushBlock(indentLevel, content);
+    i++;
+  }
+
+  return roots;
+}
+
+/**
+ * 逐块插入内容，作为批量插入不可用时的兼容回退
+ *
+ * @param {string} pageName - 页面名称
+ * @param {string} rawContent - 原始内容
+ * @param {'indent'|'markdown'} contentMode - 内容模式
+ * @returns {Promise<void>}
+ */
+async function insertContentSequentially(pageName, rawContent, contentMode = 'indent') {
+  const lines = rawContent.split('\n');
+  const blockStack = [];
+
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    if (!line.trim()) {
+      i++;
+      continue;
+    }
+
+    const indentLevel = getLineIndentLevel(line, contentMode);
+    let content = extractLineContent(line, contentMode);
+
+    if (!content) {
+      i++;
+      continue;
+    }
+
+    if (content.startsWith('```')) {
+      let codeBlock = content + '\n';
+      i++;
+
+      while (i < lines.length) {
+        const codeLine = lines[i];
+        codeBlock += codeLine + '\n';
+
+        if (codeLine.trim().startsWith('```')) {
+          break;
+        }
+
+        i++;
+      }
+
+      content = codeBlock.trim();
+    } else if (content.includes('|')) {
+      let tableBlock = content + '\n';
+      i++;
+
+      while (i < lines.length) {
+        const nextLine = lines[i];
+        const nextContent = extractLineContent(nextLine, contentMode);
+
+        if (nextContent && nextContent.includes('|')) {
+          tableBlock += nextContent + '\n';
+          i++;
+          continue;
+        }
+
+        i--;
+        break;
+      }
+
+      content = tableBlock.trim();
+    }
+
+    blockStack.splice(indentLevel);
+
+    let parentUuid = null;
+    if (indentLevel > 0 && blockStack[indentLevel - 1]) {
+      parentUuid = blockStack[indentLevel - 1];
+    }
+
+    const insertedBlock = await logseq.Editor.insertBlock(
+      parentUuid || pageName,
+      content,
+      {
+        sibling: parentUuid ? false : (blockStack.length > 0)
+      }
+    );
+
+    if (insertedBlock) {
+      blockStack[indentLevel] = insertedBlock.uuid;
+    }
+
+    i++;
+  }
+}
+
+/**
  * 替换当前页面内容
  * 
  * @param {string} convertedContent - 转换后的内容
+ * @param {'indent'|'markdown'} contentMode - 内容模式
  * @returns {Promise<boolean>} - 是否成功
  */
-export async function replaceCurrentPageContent(convertedContent) {
+export async function replaceCurrentPageContent(convertedContent, contentMode = 'indent') {
   try {
     const currentPage = await getCurrentPage();
     if (!currentPage) {
@@ -67,92 +289,28 @@ export async function replaceCurrentPageContent(convertedContent) {
         await logseq.Editor.removeBlock(block.uuid);
       }
     }
-    
-    // 解析转换内容并逐块插入
-    const lines = convertedContent.split('\n');
-    const blockStack = []; // 存储各层级的块UUID
-    
-    let i = 0;
-    while (i < lines.length) {
-      const line = lines[i];
-      if (!line.trim()) {
-        i++;
-        continue;
-      }
-      
-      // 计算缩进层级（每个tab算一级）
-      const indentMatch = line.match(/^(\t*)/);
-      const indentLevel = indentMatch ? indentMatch[1].length : 0;
-      
-      // 移除'- '前缀和缩进
-      let content = line.replace(/^\t*- /, '').trim();
-      if (!content) {
-        i++;
-        continue;
-      }
-      
-      // 检查是否是代码块开始
-      if (content.startsWith('```')) {
-        let codeBlock = content + '\n';
-        i++;
-        // 收集整个代码块
-        while (i < lines.length) {
-          const codeLine = lines[i];
-          codeBlock += codeLine + '\n';
-          if (codeLine.trim().startsWith('```') && codeLine.trim() !== '```') {
-            break;
-          }
-          if (codeLine.trim() === '```') {
-            break;
-          }
-          i++;
-        }
-        content = codeBlock.trim();
-      }
-      // 检查是否是表格行
-      else if (content.includes('|')) {
-        let tableBlock = content + '\n';
-        i++;
-        // 收集整个表格
-        while (i < lines.length) {
-          const nextLine = lines[i];
-          const nextContent = nextLine.replace(/^\t*- /, '').trim();
-          if (nextContent && nextContent.includes('|')) {
-            tableBlock += nextContent + '\n';
-            i++;
-          } else {
-            i--; // 回退一行，因为不是表格的一部分
-            break;
-          }
-        }
-        content = tableBlock.trim();
-      }
-      
-      // 调整blockStack到当前层级
-      blockStack.splice(indentLevel);
-      
-      let parentUuid = null;
-      if (indentLevel > 0 && blockStack[indentLevel - 1]) {
-        parentUuid = blockStack[indentLevel - 1];
-      }
-      
-      // 插入块
-      const insertedBlock = await logseq.Editor.insertBlock(
-        parentUuid || currentPage.name,
-        content,
-        {
-          sibling: parentUuid ? false : (blockStack.length > 0)
-        }
-      );
-      
-      // 将新块UUID存储到对应层级
-      if (insertedBlock) {
-        blockStack[indentLevel] = insertedBlock.uuid;
-      }
-      
-      i++;
+
+    if (isContentEmpty(convertedContent)) {
+      return true;
     }
-    
+
+    const batchBlocks = buildBatchBlocksFromContent(convertedContent, contentMode);
+    if (!batchBlocks.length) {
+      return true;
+    }
+
+    if (typeof logseq.Editor.insertBatchBlock === 'function') {
+      try {
+        await logseq.Editor.insertBatchBlock(currentPage.name, batchBlocks, {
+          sibling: false
+        });
+        return true;
+      } catch (batchError) {
+        console.warn('批量插入失败，回退到逐块插入:', batchError);
+      }
+    }
+
+    await insertContentSequentially(currentPage.name, convertedContent, contentMode);
     return true;
   } catch (error) {
     console.error('替换页面内容时出错:', error);

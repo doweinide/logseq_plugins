@@ -3,4 +3,10 @@
  * 导出所有核心功能
  */
 
-export { convertToMarkdown, processCurrentPage, replaceCurrentPage } from './converter.js';
+export {
+  convertToMarkdown,
+  processCurrentPage,
+  toggleColonIndent,
+  replaceCurrentPage,
+  replaceCurrentPageWithMarkdown
+} from './converter.js';

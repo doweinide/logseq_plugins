@@ -7,9 +7,11 @@
  * 将 Markdown 转换为带缩进的格式
  * 
  * @param {string} mdContent - Markdown 内容
+ * @param {{ enableColonIndent?: boolean }} options - 转换选项
  * @returns {string} - 转换后的内容
  */
-export function convertMdFormat(mdContent) {
+export function convertMdFormat(mdContent, options = {}) {
+  const { enableColonIndent = false } = options;
   const lines = mdContent.trim().split('\n');
   if (!lines.length) {
     return '';
@@ -23,6 +25,13 @@ export function convertMdFormat(mdContent) {
   let inTable = false; // 跟踪是否在表格内
   let tableIndent = ''; // 记录表格的缩进
   let codeBlockIndent = ''; // 记录代码块的缩进
+  const getCurrentDepth = () => {
+    let currentDepth = realHeaderStack.length;
+    if (lastPseudoHeader) {
+      currentDepth += (lastPseudoHeader.level - lastRealHeaderLevel);
+    }
+    return Math.max(currentDepth, 0);
+  };
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -38,7 +47,7 @@ export function convertMdFormat(mdContent) {
       if (!inCodeBlock) {
         // 开始代码块
         inCodeBlock = true;
-        codeBlockIndent = '\t'.repeat(realHeaderStack.length);
+        codeBlockIndent = '\t'.repeat(getCurrentDepth());
         convertedLines.push(`${codeBlockIndent}- ${stripped}`);
       } else {
         // 结束代码块
@@ -65,7 +74,7 @@ export function convertMdFormat(mdContent) {
       if (!inTable) {
         // 开始表格
         inTable = true;
-        tableIndent = '\t'.repeat(realHeaderStack.length);
+        tableIndent = '\t'.repeat(getCurrentDepth());
         convertedLines.push(`${tableIndent}- ${stripped}`);
       } else {
         // 表格内容行，不添加'- '前缀
@@ -103,36 +112,37 @@ export function convertMdFormat(mdContent) {
       tempStripped = tempStripped.substring(1).trim();
     }
     
-    // 检查是否为特殊标题格式：**xxx**：或`xxxxx`：
-    if (level === 0) {
-      const boldTitlePattern = /^\*\*[^*]+\*\*：/;
-      const codeTitlePattern = /^`[^`]+`(?:\/`[^`]+`)*：/;
+    // 检查是否为特殊标题格式：**xxx**：、`xxxxx`：或普通引导句：
+    if (level === 0 && enableColonIndent) {
+      const boldTitlePattern = /^\*\*[^*]+\*\*[：:]/;
+      const codeTitlePattern = /^`[^`]+`(?:\/`[^`]+`)*[：:]/;
+      const plainTitlePattern = /[：:]$/;
       
-      if (boldTitlePattern.test(stripped) || codeTitlePattern.test(stripped)) {
+      if (boldTitlePattern.test(stripped) || codeTitlePattern.test(stripped) || plainTitlePattern.test(stripped)) {
         isSpecialTitle = true;
         const isBoldTitle = boldTitlePattern.test(stripped);
         const isCodeTitle = codeTitlePattern.test(stripped);
-        const currentPseudoType = isBoldTitle ? 'bold' : 'code';
+        const currentPseudoType = isBoldTitle ? 'bold' : (isCodeTitle ? 'code' : 'plain');
         
         // 伪标题的层级设置逻辑
         if (lastPseudoHeader) {
           // 有上一个伪标题
           if (lastPseudoHeader.type === currentPseudoType) {
             // 同类型伪标签
-            if (isBoldTitle) {
-              // **xxx**：同类型找真标签
+            if (isBoldTitle || currentPseudoType === 'plain') {
+              // **xxx**：或普通引导句：同类型找真标签
               level = lastRealHeaderLevel + 1;
             } else {
               // `xxxx`：同类型找**xxx**：伪标签
               level = lastPseudoHeader.level;
             }
           } else {
-            // 不同类型，`xxxx`：优先级低于**xxx**：
+            // 不同类型时，code 类型优先级低于其他引导句
             if (isCodeTitle) {
-              // 当前是code类型，优先级低，为下一级
+              // 当前是 code 类型，作为上一个伪标题的下一级
               level = lastPseudoHeader.level + 1;
             } else {
-              // 当前是bold类型，优先级高，与真标签同级
+              // 当前是 bold/plain 类型，与真标签的下一级对齐
               level = lastRealHeaderLevel + 1;
             }
           }
@@ -177,11 +187,7 @@ export function convertMdFormat(mdContent) {
       }
     } else { // 非标题行
       // 缩进量基于当前的层级状态
-      let currentDepth = realHeaderStack.length;
-      if (lastPseudoHeader) {
-        currentDepth += (lastPseudoHeader.level - lastRealHeaderLevel);
-      }
-      const indent = '\t'.repeat(currentDepth);
+      const indent = '\t'.repeat(getCurrentDepth());
       convertedLines.push(`${indent}- ${stripped}`);
     }
   }
